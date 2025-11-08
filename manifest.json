@@ -8,7 +8,9 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://*/*"
+    "https://*/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
   ],
   "action": {
     "default_popup": "html/popup.html"

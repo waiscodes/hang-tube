@@ -2,29 +2,81 @@
 document.addEventListener('DOMContentLoaded', () => {
   const actionBtn = document.getElementById('actionBtn');
   const status = document.getElementById('status');
+  const fetchBtn = document.getElementById('fetchBtn');
+  const transcriptViewer = document.getElementById('transcriptViewer');
+  const downloadBtn = document.getElementById('downloadBtn');
 
-  // Load saved state
+  // Load saved click count and transcript on popup open
   chrome.storage.sync.get(['clickCount'], (result) => {
     const count = result.clickCount || 0;
-    if (count > 0) {
-      status.textContent = `Button clicked ${count} times`;
+    if (count > 0) status.textContent = `Button clicked ${count} times`;
+  });
+  chrome.storage.local.get(['transcript', 'transcript_ts'], (res) => {
+    if (res && res.transcript) {
+      try { transcriptViewer.textContent = JSON.stringify(res.transcript, null, 2); }
+      catch (e) { transcriptViewer.textContent = String(res.transcript); }
+      const ts = res.transcript_ts ? new Date(res.transcript_ts).toLocaleString() : 'unknown';
+      status.textContent = `Status: loaded saved transcript (${ts})`;
     }
   });
 
-  // Handle button click
+  // Handle Action button (existing behavior)
   actionBtn.addEventListener('click', async () => {
-    // Get current tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    // Update storage
     chrome.storage.sync.get(['clickCount'], (result) => {
       const count = (result.clickCount || 0) + 1;
       chrome.storage.sync.set({ clickCount: count });
       status.textContent = `Button clicked ${count} times`;
     });
-
-    // Send message to content script
-    chrome.tabs.sendMessage(tab.id, { action: 'buttonClicked' });
+    // Notify content script
+    if (tab && tab.id) chrome.tabs.sendMessage(tab.id, { action: 'buttonClicked' });
   });
+
+  // Helper: fetch directly from popup (bypassing background) and save/display
+  async function fetchDirect(apiUrl) {
+    status.textContent = 'Status: fetching...';
+    try {
+      const resp = await fetch(apiUrl, { method: 'GET' });
+      console.log('popup fetch status', resp.status);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      // save to local storage
+      chrome.storage.local.set({ transcript: data, transcript_ts: Date.now() }, () => {
+        console.log('popup: transcript saved to local storage');
+      });
+      try { transcriptViewer.textContent = JSON.stringify(data, null, 2); }
+      catch (e) { transcriptViewer.textContent = String(data); }
+      const summary = Array.isArray(data) ? data.length + ' items' : 'data received';
+      status.textContent = 'Status: fetched and saved (' + summary + ')';
+    } catch (err) {
+      console.error('popup fetch error', err);
+      status.textContent = 'Status: fetch error: ' + (err && err.message ? err.message : String(err));
+    }
+  }
+
+  // Wire fetchBtn to perform direct fetch
+  if (fetchBtn) {
+    fetchBtn.addEventListener('click', () => {
+      const apiUrl = 'http://127.0.0.1:5000/transcript';
+      fetchDirect(apiUrl);
+    });
+  }
+
+  // Wire download button
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      chrome.storage.local.get(['transcript'], (res) => {
+        const data = res && res.transcript ? res.transcript : null;
+        if (!data) { status.textContent = 'Status: no transcript to download'; return; }
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'transcript.json'; a.style.display = 'none';
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        status.textContent = 'Status: download started';
+      });
+    });
+  }
 });
 
