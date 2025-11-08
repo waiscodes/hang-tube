@@ -97,6 +97,217 @@ indicator.style.cssText = `
 indicator.textContent = 'Hang Tube Active';
 document.body.appendChild(indicator);
 
+// Punishment functions
+const punishments = {
+  shrinkVideoPlayer: () => {
+    const player = document.getElementById('player');
+    if (player) {
+      player.style.transform = 'scale(0.5)';
+      player.style.transformOrigin = 'top left';
+      player.style.transition = 'transform 0.3s ease-in-out';
+      console.log('Video player shrunk to 50%');
+    } else {
+      console.warn('Video player element not found');
+      // Try to find it with a delay in case it loads later
+      setTimeout(() => {
+        const playerRetry = document.getElementById('player');
+        if (playerRetry) {
+          playerRetry.style.transform = 'scale(0.5)';
+          playerRetry.style.transformOrigin = 'top left';
+          playerRetry.style.transition = 'transform 0.3s ease-in-out';
+        }
+      }, 500);
+    }
+  },
+  // Add more punishment functions here as needed
+  // blurVideo: () => { ... },
+  // pauseVideo: () => { ... },
+};
+
+// Quiz configuration array
+const quizzes = [
+  {
+    id: 'quiz-1',
+    title: 'Hang Tube',
+    question: 'What is the main topic of this video?',
+    answers: [
+      'Apple is paying Google to fix Siri',
+      'Google is developing a new AI assistant',
+      'Apple is launching a new iPhone model'
+    ],
+    correctAnswerIndex: 0,
+    delay: 5000, // Show after 5 seconds
+    punishment: null // No punishment for first quiz
+  },
+  {
+    id: 'quiz-2',
+    title: 'Second Quiz',
+    question: 'What is the capital of France?',
+    answers: [
+      'London',
+      'Paris',
+      'Berlin'
+    ],
+    correctAnswerIndex: 1,
+    delay: 15000, // Show after 15 seconds (10 seconds after first quiz)
+    punishment: 'shrinkVideoPlayer' // Shrink video player if wrong
+  }
+  // Add more quizzes here as needed
+];
+
+// Generic quiz creation function
+function createQuiz(quizData) {
+  // Check if quiz already exists
+  if (document.getElementById(`hang-tube-quiz-${quizData.id}`)) {
+    return;
+  }
+
+  // Create overlay backdrop
+  const overlay = document.createElement('div');
+  overlay.id = `hang-tube-quiz-overlay-${quizData.id}`;
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: ${100000 + quizzes.indexOf(quizData)};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-in;
+  `;
+
+  // Create popup container
+  const popup = document.createElement('div');
+  popup.id = `hang-tube-quiz-${quizData.id}`;
+  popup.style.cssText = `
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    width: 350px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    animation: slideIn 0.3s ease-out;
+    position: relative;
+  `;
+
+  // Add CSS animations if not already added
+  if (!document.getElementById('hang-tube-quiz-animations')) {
+    const style = document.createElement('style');
+    style.id = 'hang-tube-quiz-animations';
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideIn {
+        from { transform: translateY(-20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Generate answer buttons HTML
+  const answersHTML = quizData.answers.map((answer, index) => 
+    `<button class="hang-tube-quiz-answer-btn" data-quiz-id="${quizData.id}" data-answer="${index}" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">${answer}</button>`
+  ).join('');
+
+  // Popup content
+  popup.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h1 style="font-size: 24px; font-weight: 600; color: #333; margin: 0;">${quizData.title}</h1>
+      <button id="hang-tube-quiz-close-${quizData.id}" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+    </div>
+    
+    <!-- Multiple Choice Question -->
+    <div id="hang-tube-question-container-${quizData.id}" style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;border:1px solid #e0e0e0">
+      <h2 style="font-size:16px;font-weight:600;color:#333;margin-bottom:12px">Question:</h2>
+      <p id="hang-tube-question-text-${quizData.id}" style="font-size:14px;color:#555;margin-bottom:16px">${quizData.question}</p>
+      <div id="hang-tube-answers-container-${quizData.id}" style="display:flex;flex-direction:column;gap:8px">
+        ${answersHTML}
+      </div>
+      <div id="hang-tube-question-feedback-${quizData.id}" style="margin-top:12px;font-size:14px;font-weight:600;display:none"></div>
+    </div>
+  `;
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+
+  // Close button handler
+  const closeBtn = document.getElementById(`hang-tube-quiz-close-${quizData.id}`);
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      overlay.remove();
+    });
+  }
+
+  // Close on overlay click (outside popup)
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
+
+  // Answer button handlers
+  const answerButtons = popup.querySelectorAll(`.hang-tube-quiz-answer-btn[data-quiz-id="${quizData.id}"]`);
+  const questionFeedback = document.getElementById(`hang-tube-question-feedback-${quizData.id}`);
+
+  answerButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const selectedAnswer = parseInt(btn.dataset.answer);
+      const isCorrect = selectedAnswer === quizData.correctAnswerIndex;
+
+      // Disable all buttons
+      answerButtons.forEach((b) => {
+        b.style.pointerEvents = 'none';
+        if (parseInt(b.dataset.answer) === quizData.correctAnswerIndex) {
+          b.style.background = '#4CAF50';
+          b.style.color = '#fff';
+          b.style.borderColor = '#4CAF50';
+        } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
+          b.style.background = '#f44336';
+          b.style.color = '#fff';
+          b.style.borderColor = '#f44336';
+        } else {
+          b.style.opacity = '0.6';
+        }
+      });
+
+      // Show feedback
+      if (questionFeedback) {
+        questionFeedback.style.display = 'block';
+        const correctAnswerText = quizData.answers[quizData.correctAnswerIndex];
+        questionFeedback.textContent = isCorrect ? '✓ Correct!' : `✗ Wrong! The correct answer is: ${correctAnswerText}`;
+        questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
+      }
+
+      // Apply punishment if wrong answer
+      if (!isCorrect && quizData.punishment && punishments[quizData.punishment]) {
+        punishments[quizData.punishment]();
+      }
+    });
+
+    // Hover effect
+    btn.addEventListener('mouseenter', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#4CAF50';
+        btn.style.background = '#f0f8f0';
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#ddd';
+        btn.style.background = '#fff';
+      }
+    });
+  });
+}
+
 // Auto-popup functionality - show popup after 5 seconds
 function createAutoPopup() {
   // Check if popup already exists
@@ -163,15 +374,11 @@ function createAutoPopup() {
     </div>
     <div id="hang-tube-status" style="margin-top: 12px; color: #333; font-size: 14px;">Status: idle</div>
     
-    <!-- Multiple Choice Question -->
+    <!-- Multiple Choice Question (dynamically generated from quizzes array) -->
     <div id="hang-tube-question-container" style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;border:1px solid #e0e0e0">
       <h2 style="font-size:16px;font-weight:600;color:#333;margin-bottom:12px">Question:</h2>
-      <p id="hang-tube-question-text" style="font-size:14px;color:#555;margin-bottom:16px">What is the main topic of this video?</p>
-      <div id="hang-tube-answers-container" style="display:flex;flex-direction:column;gap:8px">
-        <button class="hang-tube-answer-btn" data-answer="0" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Apple is paying Google to fix Siri</button>
-        <button class="hang-tube-answer-btn" data-answer="1" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Google is developing a new AI assistant</button>
-        <button class="hang-tube-answer-btn" data-answer="2" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Apple is launching a new iPhone model</button>
-      </div>
+      <p id="hang-tube-question-text" style="font-size:14px;color:#555;margin-bottom:16px"></p>
+      <div id="hang-tube-answers-container" style="display:flex;flex-direction:column;gap:8px"></div>
       <div id="hang-tube-question-feedback" style="margin-top:12px;font-size:14px;font-weight:600;display:none"></div>
     </div>
     
@@ -309,220 +516,96 @@ function createAutoPopup() {
     });
   }
 
-  // Multiple choice question handler
-  const answerButtons = popup.querySelectorAll('.hang-tube-answer-btn');
-  const questionFeedback = document.getElementById('hang-tube-question-feedback');
-  const correctAnswer = 0; // First answer is correct
-
-  answerButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const selectedAnswer = parseInt(btn.dataset.answer);
-      const isCorrect = selectedAnswer === correctAnswer;
-
-      // Disable all buttons
-      answerButtons.forEach((b) => {
-        b.style.pointerEvents = 'none';
-        if (parseInt(b.dataset.answer) === correctAnswer) {
-          b.style.background = '#4CAF50';
-          b.style.color = '#fff';
-          b.style.borderColor = '#4CAF50';
-        } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
-          b.style.background = '#f44336';
-          b.style.color = '#fff';
-          b.style.borderColor = '#f44336';
-        } else {
-          b.style.opacity = '0.6';
-        }
-      });
-
-      // Show feedback
-      if (questionFeedback) {
-        questionFeedback.style.display = 'block';
-        questionFeedback.textContent = isCorrect ? '✓ Correct!' : '✗ Wrong! The correct answer is: Apple is paying Google to fix Siri';
-        questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
-      }
-    });
-
-    // Hover effect
-    btn.addEventListener('mouseenter', () => {
-      if (btn.style.pointerEvents !== 'none') {
-        btn.style.borderColor = '#4CAF50';
-        btn.style.background = '#f0f8f0';
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (btn.style.pointerEvents !== 'none') {
-        btn.style.borderColor = '#ddd';
-        btn.style.background = '#fff';
-      }
-    });
-  });
-}
-
-// Function to shrink video player by 50%
-function shrinkVideoPlayer() {
-  const player = document.getElementById('player');
-  if (player) {
-    player.style.transform = 'scale(0.5)';
-    player.style.transformOrigin = 'top left';
-    player.style.transition = 'transform 0.3s ease-in-out';
-    console.log('Video player shrunk to 50%');
-  } else {
-    console.warn('Video player element not found');
-    // Try to find it with a delay in case it loads later
-    setTimeout(() => {
-      const playerRetry = document.getElementById('player');
-      if (playerRetry) {
-        playerRetry.style.transform = 'scale(0.5)';
-        playerRetry.style.transformOrigin = 'top left';
-        playerRetry.style.transition = 'transform 0.3s ease-in-out';
-      }
-    }, 500);
-  }
-}
-
-// Second quiz popup functionality - shows up 10 seconds after first popup
-function createSecondQuiz() {
-  // Check if second quiz already exists
-  if (document.getElementById('hang-tube-second-quiz')) {
-    return;
-  }
-
-  // Create overlay backdrop
-  const overlay = document.createElement('div');
-  overlay.id = 'hang-tube-second-quiz-overlay';
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 100001;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.3s ease-in;
-  `;
-
-  // Create popup container
-  const popup = document.createElement('div');
-  popup.id = 'hang-tube-second-quiz';
-  popup.style.cssText = `
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    width: 350px;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    animation: slideIn 0.3s ease-out;
-    position: relative;
-  `;
-
-  // Second quiz content
-  popup.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-      <h1 style="font-size: 24px; font-weight: 600; color: #333; margin: 0;">Second Quiz</h1>
-      <button id="hang-tube-second-close-btn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
-    </div>
+  // Populate first quiz from quizzes array
+  const firstQuiz = quizzes[0];
+  if (firstQuiz) {
+    const questionText = document.getElementById('hang-tube-question-text');
+    const answersContainer = document.getElementById('hang-tube-answers-container');
+    const questionFeedback = document.getElementById('hang-tube-question-feedback');
     
-    <!-- Second Multiple Choice Question -->
-    <div id="hang-tube-second-question-container" style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;border:1px solid #e0e0e0">
-      <h2 style="font-size:16px;font-weight:600;color:#333;margin-bottom:12px">Question 2:</h2>
-      <p id="hang-tube-second-question-text" style="font-size:14px;color:#555;margin-bottom:16px">What is the capital of France?</p>
-      <div id="hang-tube-second-answers-container" style="display:flex;flex-direction:column;gap:8px">
-        <button class="hang-tube-second-answer-btn" data-answer="0" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">London</button>
-        <button class="hang-tube-second-answer-btn" data-answer="1" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Paris</button>
-        <button class="hang-tube-second-answer-btn" data-answer="2" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Berlin</button>
-      </div>
-      <div id="hang-tube-second-question-feedback" style="margin-top:12px;font-size:14px;font-weight:600;display:none"></div>
-    </div>
-  `;
+    if (questionText) questionText.textContent = firstQuiz.question;
+    
+    if (answersContainer) {
+      answersContainer.innerHTML = '';
+      firstQuiz.answers.forEach((answer, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'hang-tube-answer-btn';
+        btn.dataset.answer = index;
+        btn.textContent = answer;
+        btn.style.cssText = 'padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s';
+        answersContainer.appendChild(btn);
+        
+        // Answer button handler
+        btn.addEventListener('click', () => {
+          const selectedAnswer = parseInt(btn.dataset.answer);
+          const isCorrect = selectedAnswer === firstQuiz.correctAnswerIndex;
+          const allButtons = answersContainer.querySelectorAll('.hang-tube-answer-btn');
 
-  overlay.appendChild(popup);
-  document.body.appendChild(overlay);
+          // Disable all buttons
+          allButtons.forEach((b) => {
+            b.style.pointerEvents = 'none';
+            if (parseInt(b.dataset.answer) === firstQuiz.correctAnswerIndex) {
+              b.style.background = '#4CAF50';
+              b.style.color = '#fff';
+              b.style.borderColor = '#4CAF50';
+            } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
+              b.style.background = '#f44336';
+              b.style.color = '#fff';
+              b.style.borderColor = '#f44336';
+            } else {
+              b.style.opacity = '0.6';
+            }
+          });
 
-  // Close button handler
-  const closeBtn = document.getElementById('hang-tube-second-close-btn');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      overlay.remove();
-    });
+          // Show feedback
+          if (questionFeedback) {
+            questionFeedback.style.display = 'block';
+            const correctAnswerText = firstQuiz.answers[firstQuiz.correctAnswerIndex];
+            questionFeedback.textContent = isCorrect ? '✓ Correct!' : `✗ Wrong! The correct answer is: ${correctAnswerText}`;
+            questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
+          }
+
+          // Apply punishment if wrong answer
+          if (!isCorrect && firstQuiz.punishment && punishments[firstQuiz.punishment]) {
+            punishments[firstQuiz.punishment]();
+          }
+        });
+
+        // Hover effect
+        btn.addEventListener('mouseenter', () => {
+          if (btn.style.pointerEvents !== 'none') {
+            btn.style.borderColor = '#4CAF50';
+            btn.style.background = '#f0f8f0';
+          }
+        });
+        btn.addEventListener('mouseleave', () => {
+          if (btn.style.pointerEvents !== 'none') {
+            btn.style.borderColor = '#ddd';
+            btn.style.background = '#fff';
+          }
+        });
+      });
+    }
   }
+}
 
-  // Close on overlay click (outside popup)
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      overlay.remove();
+// Initialize quizzes - loop through quizzes array and create them with their delays
+function initializeQuizzes() {
+  quizzes.forEach((quiz, index) => {
+    if (index === 0) {
+      // First quiz is embedded in the main popup, so just create the popup
+      setTimeout(createAutoPopup, quiz.delay);
+    } else {
+      // Other quizzes use the generic createQuiz function
+      setTimeout(() => createQuiz(quiz), quiz.delay);
     }
   });
-
-  // Second quiz answer handler
-  const answerButtons = popup.querySelectorAll('.hang-tube-second-answer-btn');
-  const questionFeedback = document.getElementById('hang-tube-second-question-feedback');
-  const correctAnswer = 1; // Second answer (Paris) is correct
-
-  answerButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const selectedAnswer = parseInt(btn.dataset.answer);
-      const isCorrect = selectedAnswer === correctAnswer;
-
-      // Disable all buttons
-      answerButtons.forEach((b) => {
-        b.style.pointerEvents = 'none';
-        if (parseInt(b.dataset.answer) === correctAnswer) {
-          b.style.background = '#4CAF50';
-          b.style.color = '#fff';
-          b.style.borderColor = '#4CAF50';
-        } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
-          b.style.background = '#f44336';
-          b.style.color = '#fff';
-          b.style.borderColor = '#f44336';
-        } else {
-          b.style.opacity = '0.6';
-        }
-      });
-
-      // Show feedback
-      if (questionFeedback) {
-        questionFeedback.style.display = 'block';
-        questionFeedback.textContent = isCorrect ? '✓ Correct!' : '✗ Wrong! The correct answer is: Paris';
-        questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
-      }
-
-      // If wrong answer, shrink the video player
-      if (!isCorrect) {
-        shrinkVideoPlayer();
-      }
-    });
-
-    // Hover effect
-    btn.addEventListener('mouseenter', () => {
-      if (btn.style.pointerEvents !== 'none') {
-        btn.style.borderColor = '#4CAF50';
-        btn.style.background = '#f0f8f0';
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (btn.style.pointerEvents !== 'none') {
-        btn.style.borderColor = '#ddd';
-        btn.style.background = '#fff';
-      }
-    });
-  });
 }
 
-// Wait for page to be fully loaded, then show popup after 5 seconds
-// And show second quiz 10 seconds after the first popup (15 seconds total)
+// Wait for page to be fully loaded, then initialize all quizzes
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(createAutoPopup, 5000);
-    setTimeout(createSecondQuiz, 15000); // 10 seconds after first popup (5s + 10s = 15s)
-  });
+  document.addEventListener('DOMContentLoaded', initializeQuizzes);
 } else {
-  setTimeout(createAutoPopup, 5000);
-  setTimeout(createSecondQuiz, 15000); // 10 seconds after first popup (5s + 10s = 15s)
+  initializeQuizzes();
 }
 
