@@ -124,36 +124,59 @@ const punishments = {
   // pauseVideo: () => { ... },
 };
 
-// Quiz configuration array
-const quizzes = [
-  {
-    id: 'quiz-1',
-    title: 'Hang Tube',
-    question: 'What is the main topic of this video?',
-    answers: [
-      'Apple is paying Google to fix Siri',
-      'Google is developing a new AI assistant',
-      'Apple is launching a new iPhone model'
-    ],
-    correctAnswerIndex: 0,
-    delay: 5000, // Show after 5 seconds
-    punishment: null // No punishment for first quiz
-  },
-  {
-    id: 'quiz-2',
-    title: 'Second Quiz',
-    question: 'What is the capital of France?',
-    answers: [
-      'London',
-      'Paris',
-      'Berlin'
-    ],
-    correctAnswerIndex: 1,
-    delay: 15000, // Show after 15 seconds (10 seconds after first quiz)
-    punishment: 'shrinkVideoPlayer' // Shrink video player if wrong
+// Function to get YouTube video ID from the current page URL
+function getYouTubeVideoId(url) {
+  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[7].length === 11) ? match[7] : null;
+}
+
+// Function to fetch questions from the Python server
+async function fetchQuestionsFromServer(videoId) {
+  try {
+    const response = await fetch('http://127.0.0.1:5001/generate_questions_for_video', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ video_id: videoId })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching questions from server:', error);
+    throw error;
   }
-  // Add more quizzes here as needed
-];
+}
+
+// Function to transform server question format to quiz format
+function transformServerQuestionToQuiz(serverQuestion, index) {
+  const choiceMap = { 'A': 0, 'B': 1, 'C': 2 };
+  const correctAnswerKey = serverQuestion.correct_answer;
+  const correctAnswerIndex = choiceMap[correctAnswerKey] || 0;
+  
+  return {
+    id: `quiz-${index + 1}`,
+    title: `Hang Tube Quiz ${index + 1}`,
+    question: serverQuestion.question,
+    answers: [
+      serverQuestion.choices.A,
+      serverQuestion.choices.B,
+      serverQuestion.choices.C
+    ],
+    correctAnswerIndex: correctAnswerIndex,
+    delay: 5000 + (index * 10000), // First quiz at 5s, then every 10s after
+    punishment: index === 0 ? null : 'shrinkVideoPlayer' // No punishment for first quiz
+  };
+}
+
+// Quiz configuration array - will be populated from server
+let quizzes = [];
 
 // Generic quiz creation function
 function createQuiz(quizData) {
@@ -162,6 +185,9 @@ function createQuiz(quizData) {
     return;
   }
 
+  // Extract quiz index from id (e.g., "quiz-1" -> 1)
+  const quizIndex = parseInt(quizData.id.replace('quiz-', '')) || 0;
+  
   // Create overlay backdrop
   const overlay = document.createElement('div');
   overlay.id = `hang-tube-quiz-overlay-${quizData.id}`;
@@ -172,7 +198,7 @@ function createQuiz(quizData) {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: ${100000 + quizzes.indexOf(quizData)};
+    z-index: ${100000 + quizIndex};
     display: flex;
     align-items: center;
     justify-content: center;
@@ -309,9 +335,14 @@ function createQuiz(quizData) {
 }
 
 // Auto-popup functionality - show popup after 5 seconds
-function createAutoPopup() {
+function createAutoPopup(firstQuiz) {
   // Check if popup already exists
   if (document.getElementById('hang-tube-auto-popup')) {
+    return;
+  }
+  
+  // If no quiz provided, don't create popup
+  if (!firstQuiz) {
     return;
   }
 
@@ -516,8 +547,7 @@ function createAutoPopup() {
     });
   }
 
-  // Populate first quiz from quizzes array
-  const firstQuiz = quizzes[0];
+  // Populate first quiz (passed as parameter)
   if (firstQuiz) {
     const questionText = document.getElementById('hang-tube-question-text');
     const answersContainer = document.getElementById('hang-tube-answers-container');
@@ -589,17 +619,42 @@ function createAutoPopup() {
   }
 }
 
-// Initialize quizzes - loop through quizzes array and create them with their delays
-function initializeQuizzes() {
-  quizzes.forEach((quiz, index) => {
-    if (index === 0) {
-      // First quiz is embedded in the main popup, so just create the popup
-      setTimeout(createAutoPopup, quiz.delay);
-    } else {
-      // Other quizzes use the generic createQuiz function
-      setTimeout(() => createQuiz(quiz), quiz.delay);
+// Initialize quizzes - fetch from server and create them with their delays
+async function initializeQuizzes() {
+  try {
+    // Get video ID from current page
+    const videoId = getYouTubeVideoId(window.location.href);
+    
+    if (!videoId) {
+      console.log('Not on a YouTube video page, skipping quiz initialization');
+      return;
     }
-  });
+    
+    // Fetch questions from server
+    const quizData = await fetchQuestionsFromServer(videoId);
+    
+    if (!quizData || !quizData.questions || quizData.questions.length === 0) {
+      console.log('No questions received from server');
+      return;
+    }
+    
+    // Transform server questions to quiz format
+    quizzes = quizData.questions.map((q, index) => transformServerQuestionToQuiz(q, index));
+    
+    // Initialize quizzes with delays
+    quizzes.forEach((quiz, index) => {
+      if (index === 0) {
+        // First quiz is embedded in the main popup, so just create the popup
+        setTimeout(() => createAutoPopup(quiz), quiz.delay);
+      } else {
+        // Other quizzes use the generic createQuiz function
+        setTimeout(() => createQuiz(quiz), quiz.delay);
+      }
+    });
+  } catch (error) {
+    console.error('Error initializing quizzes:', error);
+    // Fallback: show error message or use empty quizzes array
+  }
 }
 
 // Wait for page to be fully loaded, then initialize all quizzes
