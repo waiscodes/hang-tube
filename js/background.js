@@ -82,6 +82,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     })();
     return true; // async response
   }
+  
+  // Close the current tab
+  if (request.action === 'CLOSE_TAB') {
+    if (sender.tab && sender.tab.id) {
+      chrome.tabs.remove(sender.tab.id);
+      sendResponse({ ok: true });
+    } else {
+      sendResponse({ ok: false, error: 'No tab ID provided' });
+    }
+    return true;
+  }
 });
 
 

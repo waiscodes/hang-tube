@@ -120,7 +120,7 @@ const punishments = {
     }
   },
   makeScreenRed: () => {
-    // Create a red overlay that covers the entire screen
+    // Create a red overlay that covers the entire screen (this will persist)
     let redOverlay = document.getElementById('hang-tube-red-overlay');
     if (!redOverlay) {
       redOverlay = document.createElement('div');
@@ -139,10 +139,51 @@ const punishments = {
       `;
       document.body.appendChild(redOverlay);
     } else {
-      // If overlay already exists, just make sure it's visible
+      // If overlay already exists, ensure it's visible with the right opacity
       redOverlay.style.opacity = '0.3';
     }
     console.log('Screen turned red');
+  },
+  makeTextSmaller: () => {
+    // Make all text on the page smaller
+    const allTextElements = document.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6, a, li, td, th, label, input, textarea, button, caption, dt, dd');
+    allTextElements.forEach(element => {
+      const currentFontSize = window.getComputedStyle(element).fontSize;
+      if (currentFontSize && currentFontSize !== '0px') {
+        // Reduce font size by 20%
+        const fontSizeValue = parseFloat(currentFontSize);
+        element.style.fontSize = (fontSizeValue * 0.8) + 'px';
+        element.style.transition = 'font-size 0.5s ease-in-out';
+      }
+    });
+    console.log('Text made smaller');
+  },
+  changeFontToComicSans: () => {
+    // Change all text on the page to Comic Sans font
+    const allTextElements = document.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6, a, li, td, th, label, input, textarea, button, caption, dt, dd');
+    allTextElements.forEach(element => {
+      element.style.fontFamily = '"Comic Sans MS", "Comic Sans", cursive, sans-serif';
+    });
+    console.log('Font changed to Comic Sans');
+  },
+  closeTab: () => {
+    // Request the background script to close the current tab
+    chrome.runtime.sendMessage({ action: 'CLOSE_TAB' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error closing tab:', chrome.runtime.lastError);
+      } else {
+        console.log('Tab close requested:', response);
+      }
+    });
+    console.log('Tab close requested');
+  },
+  removeRedScreen: () => {
+    // Remove the red screen effect
+    const redOverlay = document.getElementById('hang-tube-red-overlay');
+    if (redOverlay) {
+      redOverlay.remove();
+      console.log('Red screen removed');
+    }
   },
   // Add more punishment functions here as needed
   // blurVideo: () => { ... },
@@ -190,8 +231,19 @@ async function fetchQuestionsFromServer(videoId) {
   }
 }
 
-// Track wrong guesses to apply stronger punishments after second wrong guess
-let wrongGuessCounter = 0;
+// Track wrong guesses to apply stronger punishments progressively
+// Store in sessionStorage so it persists across quizzes on the same page
+function getWrongGuessCounter() {
+  const count = sessionStorage.getItem('hangTubeWrongGuesses');
+  return count ? parseInt(count) : 0;
+}
+
+function setWrongGuessCounter(count) {
+  sessionStorage.setItem('hangTubeWrongGuesses', count.toString());
+}
+
+// Initialize counter
+let wrongGuessCounter = getWrongGuessCounter();
 
 // Function to transform server question format to quiz format
 function transformServerQuestionToQuiz(serverQuestion, index) {
@@ -407,26 +459,86 @@ function createQuiz(quizData) {
       if (!isCorrect) {
         // Update the wrong guess counter
         wrongGuessCounter++;
+        console.log(`Wrong answer! Counter is now: ${wrongGuessCounter}`);
         
         // Apply appropriate punishment based on number of wrong guesses
-        if (wrongGuessCounter >= 2) {
-          // Apply more severe punishment after second wrong guess
+        if (wrongGuessCounter >= 5) {
+          console.log(`Fifth wrong answer! Closing the tab.`);
+          // Apply all previous punishments and close the tab
+          if (punishments.shrinkVideoPlayer) {
+            punishments.shrinkVideoPlayer();
+          }
           if (punishments.makeScreenRed) {
             punishments.makeScreenRed();
           }
-          // Also apply the original punishment
-          if (quizData.punishment && punishments[quizData.punishment]) {
-            punishments[quizData.punishment]();
+          if (punishments.makeTextSmaller) {
+            punishments.makeTextSmaller();
+          }
+          if (punishments.changeFontToComicSans) {
+            punishments.changeFontToComicSans();
+          }
+          // Wait a moment to let the other effects take place, then close tab
+          setTimeout(() => {
+            if (punishments.closeTab) {
+              punishments.closeTab();
+            }
+          }, 1000);
+        } else if (wrongGuessCounter >= 4) {
+          console.log(`Fourth wrong answer! Applying text smaller and Comic Sans punishment.`);
+          // Apply text smaller + Comic Sans + previous punishments
+          if (punishments.shrinkVideoPlayer) {
+            punishments.shrinkVideoPlayer();
+          }
+          if (punishments.makeScreenRed) {
+            punishments.makeScreenRed();
+          }
+          if (punishments.makeTextSmaller) {
+            punishments.makeTextSmaller();
+          }
+          if (punishments.changeFontToComicSans) {
+            punishments.changeFontToComicSans();
+          }
+        } else if (wrongGuessCounter >= 3) {
+          console.log(`Third wrong answer! Making text smaller and changing to Comic Sans.`);
+          // Apply make text smaller + change font + previous punishments
+          if (punishments.shrinkVideoPlayer) {
+            punishments.shrinkVideoPlayer();
+          }
+          if (punishments.makeScreenRed) {
+            punishments.makeScreenRed();
+          }
+          if (punishments.makeTextSmaller) {
+            punishments.makeTextSmaller();
+          }
+          if (punishments.changeFontToComicSans) {
+            punishments.changeFontToComicSans();
+          }
+        } else if (wrongGuessCounter >= 2) {
+          console.log(`Second wrong answer reached! Applying red screen punishment.`);
+          // Apply red screen + previous punishment
+          if (punishments.shrinkVideoPlayer) {
+            punishments.shrinkVideoPlayer();
+          }
+          if (punishments.makeScreenRed) {
+            punishments.makeScreenRed();
           }
         } else {
+          console.log(`First wrong answer. Shrinking video player.`);
           // Apply the original punishment for first wrong guess
-          if (quizData.punishment && punishments[quizData.punishment]) {
-            punishments[quizData.punishment]();
+          if (punishments.shrinkVideoPlayer) {
+            punishments.shrinkVideoPlayer();
           }
         }
       } else {
+        console.log(`Correct answer! Resetting counter.`);
         // If correct answer, reset the counter
         wrongGuessCounter = 0;
+        setWrongGuessCounter(wrongGuessCounter);
+        
+        // Optionally remove all effects when user gets a correct answer
+        // if (punishments.removeRedScreen) {
+        //   punishments.removeRedScreen();
+        // }
       }
       
       // Close the quiz after showing feedback (wait a bit for user to see it)

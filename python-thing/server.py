@@ -102,7 +102,7 @@ def generate_questions():
         )
         
         # Generate absurd questions with multiple choices and correct answers
-        prompt = f"""Generate 4 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
+        prompt = f"""Generate 5 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
 
 Format your response ONLY as valid JSON with no additional text:
 {{
@@ -142,6 +142,15 @@ Format your response ONLY as valid JSON with no additional text:
         "C": "choice C text"
       }},
       "correct_answer": "A"
+    }},
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "B"
     }}
   ]
 }}
@@ -207,9 +216,22 @@ def generate_questions_for_video():
             }
             print(f"Successfully fetched transcript with {len(items)} items")
         except Exception as e:
-            error_msg = f'Failed to fetch transcript: {str(e)}'
-            print(f"Transcript fetch error: {error_msg}")
-            return jsonify({'error': error_msg}), 500
+            # If YouTube is blocking access, use the local transcript.json file as fallback
+            print(f"Failed to fetch transcript from YouTube: {str(e)}")
+            print("Using local transcript.json file as fallback")
+            
+            # Read from the local transcript.json file
+            if not os.path.exists(TRANSCRIPT_PATH):
+                error_msg = 'transcript.json not found and YouTube access is blocked'
+                print(f"Local transcript error: {error_msg}")
+                return jsonify({'error': error_msg}), 500
+
+            with open(TRANSCRIPT_PATH, 'r', encoding='utf-8') as f:
+                transcript_data = json.load(f)
+            
+            # Override the video_id to match the requested one
+            transcript_data['video_id'] = video_id
+            print(f"Using local transcript for video: {video_id}")
         
         # Combine transcript text
         transcript_text = " ".join([item['text'] for item in transcript_data['transcript']])
@@ -232,7 +254,7 @@ def generate_questions_for_video():
             return jsonify({'error': error_msg}), 500
         
         # Generate absurd questions with multiple choices and correct answers
-        prompt = f"""Generate 4 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
+        prompt = f"""Generate 5 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
 
 Format your response ONLY as valid JSON with no additional text:
 {{
@@ -272,6 +294,15 @@ Format your response ONLY as valid JSON with no additional text:
         "C": "choice C text"
       }},
       "correct_answer": "A"
+    }},
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "B"
     }}
   ]
 }}
