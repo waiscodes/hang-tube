@@ -1,9 +1,26 @@
 from youtube_transcript_api import YouTubeTranscriptApi
 import json
 import os
+from openai import OpenAI
+
 
 VIDEO_ID = os.environ.get('VIDEO_ID', 'j4JBzGddVgQ')
 OUTFILE = os.environ.get('OUTFILE', 'transcript.json')
+
+def llm_response():
+
+    client = OpenAI(api_key="sk-35db146d53f0444fb7335c31dc0b4a3b", base_url="https://api.deepseek.com")
+
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant"},
+            {"role": "user", "content": "Hello"},
+        ],
+        stream=False
+    )
+
+    print(response.choices[0].message.content)
 
 def snippet_to_dict(line):
     # Support attribute access and dict-like access

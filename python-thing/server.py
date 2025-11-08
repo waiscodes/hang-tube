@@ -3,6 +3,8 @@ from flask_cors import CORS
 import os
 from youtube_transcript_api import YouTubeTranscriptApi
 import json
+import openai
+from openai import OpenAI
 
 
 APP = Flask(__name__)
@@ -68,9 +70,112 @@ def health():
     return jsonify({'status': 'ok'})
 
 
-def run(port: int = 5000):
+def run(port: int = 5001):
     # Do not use debug=True for production
     APP.run(host='127.0.0.1', port=port)
+
+
+@APP.route('/generate_questions', methods=['GET'])
+def generate_questions():
+    """GET /generate_questions
+    Generates 5 absurd questions based on the transcript.json content using an AI model.
+    Requires DEEPSEEK_API_KEY or OPENAI_API_KEY environment variable.
+    """
+    try:
+        # Read the transcript
+        if not os.path.exists(TRANSCRIPT_PATH):
+            return jsonify({'error': 'transcript.json not found'}), 404
+
+        with open(TRANSCRIPT_PATH, 'r', encoding='utf-8') as f:
+            transcript_data = json.load(f)
+        
+        # Combine transcript text
+        transcript_text = " ".join([item['text'] for item in transcript_data['transcript']])
+        
+        # Get API key - using hardcoded key for this specific implementation
+        api_key = 'sk-35db146d53f0444fb7335c31dc0b4a3b'
+        
+        # Set up DeepSeek client
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com"
+        )
+        
+        # Generate absurd questions with multiple choices and correct answers
+        prompt = f"""Generate 4 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
+
+Format your response ONLY as valid JSON with no additional text:
+{{
+  "questions": [
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "A"
+    }},
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "B"
+    }},
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "C"
+    }},
+    {{
+      "question": "question text",
+      "choices": {{
+        "A": "choice A text",
+        "B": "choice B text", 
+        "C": "choice C text"
+      }},
+      "correct_answer": "A"
+    }}
+  ]
+}}
+
+The transcript is:
+{transcript_text}"""
+        
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Respond ONLY with properly formatted JSON. Do not include any other text."},
+                {"role": "user", "content": prompt}
+            ],
+            stream=False
+        )
+        
+        # Parse the response
+        try:
+            # Try to parse as JSON directly
+            result = json.loads(response.choices[0].message.content.strip())
+            questions_data = result.get('questions', [])
+        except:
+            # If direct JSON parsing fails, return an error
+            return jsonify({'error': 'Failed to parse AI response as JSON'}), 500
+        
+        # Return the generated questions
+        return jsonify({
+            'transcript_id': transcript_data['video_id'],
+            'questions': questions_data,
+            'count': len(questions_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

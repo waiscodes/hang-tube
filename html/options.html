@@ -43,6 +43,22 @@
         <label for="defaultSetting">Default Setting:</label>
         <input type="text" id="defaultSetting" placeholder="Enter default value">
       </div>
+        <div class="option-group">
+          <label for="deepseekApiKey">DeepSeek / LLM API Key:</label>
+          <input type="text" id="deepseekApiKey" placeholder="Paste your DeepSeek or OpenAI key here">
+        </div>
+        <div class="option-group">
+          <label for="deepseekEndpoint">API Endpoint (optional):</label>
+          <input type="text" id="deepseekEndpoint" placeholder="https://api.deepseek.ai/v1/quiz/generate">
+        </div>
+        <div class="option-group">
+          <label for="numQuestions">Default number of questions:</label>
+          <input type="number" id="numQuestions" min="1" max="20" value="5">
+        </div>
+        <div class="option-group">
+          <button id="validateBtn" class="btn">Validate Key / Endpoint</button>
+          <div id="validateStatus" class="status"></div>
+        </div>
       <button id="saveBtn" class="btn save-btn">Save Options</button>
       <div id="saveStatus" class="status"></div>
     </div>

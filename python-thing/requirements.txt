@@ -1,3 +1,4 @@
 youtube-transcript-api
 flask
 flask-cors
+openai
