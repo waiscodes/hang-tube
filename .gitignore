@@ -1,0 +1,21 @@
+# Chrome Extension
+*.pem
+*.crx
+hang-tube.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (if you add build tools later)
+node_modules/
+package-lock.json
+yarn.lock
+

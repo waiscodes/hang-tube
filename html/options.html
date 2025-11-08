@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hang Tube - Options</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    body {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .option-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #333;
+    }
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .save-btn {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hang Tube Options</h1>
+    <div class="content">
+      <div class="option-group">
+        <label for="defaultSetting">Default Setting:</label>
+        <input type="text" id="defaultSetting" placeholder="Enter default value">
+      </div>
+      <button id="saveBtn" class="btn save-btn">Save Options</button>
+      <div id="saveStatus" class="status"></div>
+    </div>
+  </div>
+  <script src="../js/options.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,17 @@
+{
+  "name": "hang-tube",
+  "version": "1.0.0",
+  "description": "A Chrome extension built with Manifest V3",
+  "scripts": {
+    "build": "npm run clean && npm run compress",
+    "compress": "zip -r hang-tube.zip . -x '*.git*' 'node_modules/*' '*.zip' '*.DS_Store' '*.swp' '*.swo' '*~' 'package-lock.json' 'yarn.lock'",
+    "clean": "rm -f hang-tube.zip"
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
