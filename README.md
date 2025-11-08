@@ -54,7 +54,8 @@ python test_questions.py
 - `GET /transcript` - Get the transcript JSON
 - `GET /health` - Health check
 - `POST /fetch` - Fetch a new transcript from YouTube
-- `GET /generate_questions` - Generate absurd questions from the transcript
+- `GET /generate_questions` - Generate questions from the default transcript.json
+- `POST /generate_questions_for_video` - Generate questions from a specific YouTube video ID (used by the extension)
 
 ## Files
 

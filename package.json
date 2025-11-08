@@ -6,8 +6,8 @@
     "build": "npm run clean && npm run compress",
     "compress": "zip -r hang-tube.zip . -x '*.git*' 'node_modules/*' '*.zip' '*.DS_Store' '*.swp' '*.swo' '*~' 'package-lock.json' 'yarn.lock'",
     "clean": "rm -f hang-tube.zip",
-    "start-python-server": "cd python-thing && python server.py",
-    "test-questions": "cd python-thing && python test_questions.py"
+    "start-python-server": "cd python-thing && export OPENAI_API_KEY='sk-35db146d53f0444fb7335c31dc0b4a3b' && python server.py",
+    "test-questions": "cd python-thing && export OPENAI_API_KEY='sk-35db146d53f0444fb7335c31dc0b4a3b' && python test_questions.py"
   },
   "keywords": [
     "chrome-extension",
