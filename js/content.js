@@ -119,6 +119,31 @@ const punishments = {
       }, 500);
     }
   },
+  makeScreenRed: () => {
+    // Create a red overlay that covers the entire screen
+    let redOverlay = document.getElementById('hang-tube-red-overlay');
+    if (!redOverlay) {
+      redOverlay = document.createElement('div');
+      redOverlay.id = 'hang-tube-red-overlay';
+      redOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: red;
+        opacity: 0.3;
+        z-index: 99999;
+        pointer-events: none;
+        transition: opacity 0.5s ease-in-out;
+      `;
+      document.body.appendChild(redOverlay);
+    } else {
+      // If overlay already exists, just make sure it's visible
+      redOverlay.style.opacity = '0.3';
+    }
+    console.log('Screen turned red');
+  },
   // Add more punishment functions here as needed
   // blurVideo: () => { ... },
   // pauseVideo: () => { ... },
@@ -165,6 +190,9 @@ async function fetchQuestionsFromServer(videoId) {
   }
 }
 
+// Track wrong guesses to apply stronger punishments after second wrong guess
+let wrongGuessCounter = 0;
+
 // Function to transform server question format to quiz format
 function transformServerQuestionToQuiz(serverQuestion, index) {
   const choiceMap = { 'A': 0, 'B': 1, 'C': 2 };
@@ -185,7 +213,7 @@ function transformServerQuestionToQuiz(serverQuestion, index) {
       serverQuestion.choices.C
     ],
     correctAnswerIndex: correctAnswerIndex,
-    punishment: 'shrinkVideoPlayer'
+    punishment: 'shrinkVideoPlayer' // Default punishment
   };
 }
 
@@ -376,8 +404,29 @@ function createQuiz(quizData) {
       }
 
       // Apply punishment if wrong answer
-      if (!isCorrect && quizData.punishment && punishments[quizData.punishment]) {
-        punishments[quizData.punishment]();
+      if (!isCorrect) {
+        // Update the wrong guess counter
+        wrongGuessCounter++;
+        
+        // Apply appropriate punishment based on number of wrong guesses
+        if (wrongGuessCounter >= 2) {
+          // Apply more severe punishment after second wrong guess
+          if (punishments.makeScreenRed) {
+            punishments.makeScreenRed();
+          }
+          // Also apply the original punishment
+          if (quizData.punishment && punishments[quizData.punishment]) {
+            punishments[quizData.punishment]();
+          }
+        } else {
+          // Apply the original punishment for first wrong guess
+          if (quizData.punishment && punishments[quizData.punishment]) {
+            punishments[quizData.punishment]();
+          }
+        }
+      } else {
+        // If correct answer, reset the counter
+        wrongGuessCounter = 0;
       }
       
       // Close the quiz after showing feedback (wait a bit for user to see it)
