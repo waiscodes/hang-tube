@@ -192,6 +192,7 @@ def generate_questions_for_video():
             return jsonify({'error': 'Missing "video_id" in request body'}), 400
 
         video_id = data.get('video_id')
+        print(f"Fetching transcript for video: {video_id}")
         
         # Get the transcript for the video
         try:
@@ -204,20 +205,31 @@ def generate_questions_for_video():
                 'count': len(items),
                 'transcript': items
             }
+            print(f"Successfully fetched transcript with {len(items)} items")
         except Exception as e:
-            return jsonify({'error': f'Failed to fetch transcript: {str(e)}'}), 500
+            error_msg = f'Failed to fetch transcript: {str(e)}'
+            print(f"Transcript fetch error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Combine transcript text
         transcript_text = " ".join([item['text'] for item in transcript_data['transcript']])
+        
+        if not transcript_text or len(transcript_text.strip()) == 0:
+            return jsonify({'error': 'Transcript is empty'}), 500
         
         # Get API key
         api_key = 'sk-35db146d53f0444fb7335c31dc0b4a3b'
         
         # Set up DeepSeek client
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
+        try:
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com"
+            )
+        except Exception as e:
+            error_msg = f'Failed to initialize OpenAI client: {str(e)}'
+            print(f"OpenAI client error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Generate absurd questions with multiple choices and correct answers
         prompt = f"""Generate 4 absurd, funny, and completely ridiculous questions related to the following transcript. For each question, provide 3 multiple choice options (A, B, C) and indicate which is the correct answer.
@@ -267,23 +279,37 @@ Format your response ONLY as valid JSON with no additional text:
 The transcript is:
 {transcript_text}"""
         
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant. Respond ONLY with properly formatted JSON. Do not include any other text."},
-                {"role": "user", "content": prompt}
-            ],
-            stream=False
-        )
+        try:
+            print("Calling DeepSeek API...")
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant. Respond ONLY with properly formatted JSON. Do not include any other text."},
+                    {"role": "user", "content": prompt}
+                ],
+                stream=False
+            )
+            print("DeepSeek API call successful")
+        except Exception as e:
+            error_msg = f'Failed to call AI API: {str(e)}'
+            print(f"AI API error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Parse the response
         try:
             # Try to parse as JSON directly
-            result = json.loads(response.choices[0].message.content.strip())
+            response_content = response.choices[0].message.content.strip()
+            result = json.loads(response_content)
             questions_data = result.get('questions', [])
-        except:
-            # If direct JSON parsing fails, return an error
-            return jsonify({'error': 'Failed to parse AI response as JSON'}), 500
+            print(f"Successfully parsed {len(questions_data)} questions")
+        except json.JSONDecodeError as e:
+            error_msg = f'Failed to parse AI response as JSON: {str(e)}. Response: {response_content[:200]}'
+            print(f"JSON parse error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
+        except Exception as e:
+            error_msg = f'Unexpected error parsing AI response: {str(e)}'
+            print(f"Parse error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Return the generated questions
         return jsonify({
@@ -293,7 +319,11 @@ The transcript is:
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = f'Unexpected server error: {str(e)}'
+        print(f"Unexpected error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': error_msg}), 500
 
 
 if __name__ == '__main__':

@@ -143,7 +143,18 @@ async function fetchQuestionsFromServer(videoId) {
     });
     
     if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
+      // Try to get the error message from the response
+      let errorMessage = `Server error: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.error) {
+          errorMessage = `Server error: ${errorData.error}`;
+        }
+      } catch (e) {
+        // If we can't parse the error response, use the status code
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
     
     const data = await response.json();
@@ -160,8 +171,12 @@ function transformServerQuestionToQuiz(serverQuestion, index) {
   const correctAnswerKey = serverQuestion.correct_answer;
   const correctAnswerIndex = choiceMap[correctAnswerKey] || 0;
   
+  // Generate unique ID using counter
+  quizCounter++;
+  const uniqueId = `quiz-${quizCounter}`;
+  
   return {
-    id: `quiz-${index + 1}`,
+    id: uniqueId,
     title: `Hang Tube Quiz ${index + 1}`,
     question: serverQuestion.question,
     answers: [
@@ -170,13 +185,56 @@ function transformServerQuestionToQuiz(serverQuestion, index) {
       serverQuestion.choices.C
     ],
     correctAnswerIndex: correctAnswerIndex,
-    delay: 5000 + (index * 10000), // First quiz at 5s, then every 10s after
-    punishment: index === 0 ? null : 'shrinkVideoPlayer' // No punishment for first quiz
+    punishment: 'shrinkVideoPlayer'
   };
 }
 
 // Quiz configuration array - will be populated from server
 let quizzes = [];
+
+// Quiz queue and state management
+let quizQueue = [];
+let isQuizShowing = false;
+let quizTimer = null;
+let quizCounter = 0; // Counter for unique quiz IDs
+
+// Function to show the next quiz from the queue
+function showNextQuiz() {
+  // If there's already a quiz showing or timer running, don't show another
+  if (isQuizShowing || quizTimer !== null) {
+    return;
+  }
+  
+  // If queue is empty, nothing to show
+  if (quizQueue.length === 0) {
+    return;
+  }
+  
+  // Get the next quiz from the queue
+  const nextQuiz = quizQueue.shift();
+  
+  // Mark that we're showing a quiz before creating it
+  isQuizShowing = true;
+  
+  // Create and show the quiz
+  createQuiz(nextQuiz);
+}
+
+// Function to schedule the next quiz after 5 seconds
+function scheduleNextQuiz() {
+  // Clear any existing timer
+  if (quizTimer !== null) {
+    clearTimeout(quizTimer);
+    quizTimer = null;
+  }
+  
+  // Wait 5 seconds before showing the next quiz
+  quizTimer = setTimeout(() => {
+    quizTimer = null;
+    isQuizShowing = false;
+    showNextQuiz();
+  }, 5000);
+}
 
 // Generic quiz creation function
 function createQuiz(quizData) {
@@ -264,18 +322,23 @@ function createQuiz(quizData) {
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
 
+  // Function to close the quiz and schedule the next one
+  const closeQuiz = () => {
+    overlay.remove();
+    isQuizShowing = false;
+    scheduleNextQuiz();
+  };
+
   // Close button handler
   const closeBtn = document.getElementById(`hang-tube-quiz-close-${quizData.id}`);
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      overlay.remove();
-    });
+    closeBtn.addEventListener('click', closeQuiz);
   }
 
   // Close on overlay click (outside popup)
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
-      overlay.remove();
+      closeQuiz();
     }
   });
 
@@ -316,6 +379,16 @@ function createQuiz(quizData) {
       if (!isCorrect && quizData.punishment && punishments[quizData.punishment]) {
         punishments[quizData.punishment]();
       }
+      
+      // Close the quiz after showing feedback (wait a bit for user to see it)
+      setTimeout(() => {
+        const overlay = document.getElementById(`hang-tube-quiz-overlay-${quizData.id}`);
+        if (overlay) {
+          overlay.remove();
+          isQuizShowing = false;
+          scheduleNextQuiz();
+        }
+      }, 2000); // Wait 2 seconds after answer to show feedback, then close
     });
 
     // Hover effect
@@ -334,15 +407,10 @@ function createQuiz(quizData) {
   });
 }
 
-// Auto-popup functionality - show popup after 5 seconds
-function createAutoPopup(firstQuiz) {
+// Auto-popup functionality
+function createAutoPopup() {
   // Check if popup already exists
   if (document.getElementById('hang-tube-auto-popup')) {
-    return;
-  }
-  
-  // If no quiz provided, don't create popup
-  if (!firstQuiz) {
     return;
   }
 
@@ -393,62 +461,17 @@ function createAutoPopup(firstQuiz) {
   `;
   document.head.appendChild(style);
 
-  // Popup content (matching popup.html structure)
+  // Popup content
   popup.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
       <h1 style="font-size: 24px; font-weight: 600; color: #333; margin: 0;">Hang Tube</h1>
       <button id="hang-tube-close-btn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
     </div>
-    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-      <button id="hang-tube-action-btn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Action</button>
-      <button id="hang-tube-fetch-btn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Fetch Transcript</button>
-    </div>
     <div id="hang-tube-status" style="margin-top: 12px; color: #333; font-size: 14px;">Status: idle</div>
-    
-    <!-- Multiple Choice Question (dynamically generated from quizzes array) -->
-    <div id="hang-tube-question-container" style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;border:1px solid #e0e0e0">
-      <h2 style="font-size:16px;font-weight:600;color:#333;margin-bottom:12px">Question:</h2>
-      <p id="hang-tube-question-text" style="font-size:14px;color:#555;margin-bottom:16px"></p>
-      <div id="hang-tube-answers-container" style="display:flex;flex-direction:column;gap:8px"></div>
-      <div id="hang-tube-question-feedback" style="margin-top:12px;font-size:14px;font-weight:600;display:none"></div>
-    </div>
-    
-    <div style="margin-top: 12px;">
-      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-        <strong style="font-size: 14px;">Transcript</strong>
-        <button id="hang-tube-download-btn" style="margin-left: auto; padding: 6px 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Download JSON</button>
-      </div>
-      <pre id="hang-tube-transcript-viewer" style="max-height: 260px; overflow: auto; background: #fafafa; padding: 8px; border: 1px solid #e0e0e0; margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; font-family: monospace;"></pre>
-    </div>
   `;
 
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
-
-  // Load saved data
-  chrome.storage.sync.get(['clickCount'], (result) => {
-    const count = result.clickCount || 0;
-    const statusEl = document.getElementById('hang-tube-status');
-    if (count > 0 && statusEl) {
-      statusEl.textContent = `Button clicked ${count} times`;
-    }
-  });
-
-  chrome.storage.local.get(['transcript', 'transcript_ts'], (res) => {
-    const viewer = document.getElementById('hang-tube-transcript-viewer');
-    const statusEl = document.getElementById('hang-tube-status');
-    if (res && res.transcript && viewer) {
-      try {
-        viewer.textContent = JSON.stringify(res.transcript, null, 2);
-      } catch (e) {
-        viewer.textContent = String(res.transcript);
-      }
-      if (statusEl) {
-        const ts = res.transcript_ts ? new Date(res.transcript_ts).toLocaleString() : 'unknown';
-        statusEl.textContent = `Status: loaded saved transcript (${ts})`;
-      }
-    }
-  });
 
   // Close button handler
   const closeBtn = document.getElementById('hang-tube-close-btn');
@@ -464,169 +487,16 @@ function createAutoPopup(firstQuiz) {
       overlay.remove();
     }
   });
-
-  // Action button handler
-  const actionBtn = document.getElementById('hang-tube-action-btn');
-  if (actionBtn) {
-    actionBtn.addEventListener('click', async () => {
-      chrome.storage.sync.get(['clickCount'], (result) => {
-        const count = (result.clickCount || 0) + 1;
-        chrome.storage.sync.set({ clickCount: count });
-        const statusEl = document.getElementById('hang-tube-status');
-        if (statusEl) {
-          statusEl.textContent = `Button clicked ${count} times`;
-        }
-      });
-      // Notify background/content script
-      chrome.runtime.sendMessage({ action: 'buttonClicked' });
-    });
-  }
-
-  // Fetch button handler
-  const fetchBtn = document.getElementById('hang-tube-fetch-btn');
-  if (fetchBtn) {
-    fetchBtn.addEventListener('click', async () => {
-      const statusEl = document.getElementById('hang-tube-status');
-      const viewer = document.getElementById('hang-tube-transcript-viewer');
-      if (statusEl) statusEl.textContent = 'Status: fetching...';
-      
-      try {
-        const resp = await fetch('http://127.0.0.1:5000/transcript', { method: 'GET' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        
-        chrome.storage.local.set({ transcript: data, transcript_ts: Date.now() }, () => {
-          console.log('transcript saved to local storage');
-        });
-        
-        if (viewer) {
-          try {
-            viewer.textContent = JSON.stringify(data, null, 2);
-          } catch (e) {
-            viewer.textContent = String(data);
-          }
-        }
-        
-        if (statusEl) {
-          const summary = Array.isArray(data) ? data.length + ' items' : 'data received';
-          statusEl.textContent = 'Status: fetched and saved (' + summary + ')';
-        }
-      } catch (err) {
-        console.error('fetch error', err);
-        if (statusEl) {
-          statusEl.textContent = 'Status: fetch error: ' + (err && err.message ? err.message : String(err));
-        }
-      }
-    });
-  }
-
-  // Download button handler
-  const downloadBtn = document.getElementById('hang-tube-download-btn');
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', () => {
-      chrome.storage.local.get(['transcript'], (res) => {
-        const data = res && res.transcript ? res.transcript : null;
-        const statusEl = document.getElementById('hang-tube-status');
-        if (!data) {
-          if (statusEl) statusEl.textContent = 'Status: no transcript to download';
-          return;
-        }
-        const json = JSON.stringify(data, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'transcript.json';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        if (statusEl) statusEl.textContent = 'Status: download started';
-      });
-    });
-  }
-
-  // Populate first quiz (passed as parameter)
-  if (firstQuiz) {
-    const questionText = document.getElementById('hang-tube-question-text');
-    const answersContainer = document.getElementById('hang-tube-answers-container');
-    const questionFeedback = document.getElementById('hang-tube-question-feedback');
-    
-    if (questionText) questionText.textContent = firstQuiz.question;
-    
-    if (answersContainer) {
-      answersContainer.innerHTML = '';
-      firstQuiz.answers.forEach((answer, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'hang-tube-answer-btn';
-        btn.dataset.answer = index;
-        btn.textContent = answer;
-        btn.style.cssText = 'padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s';
-        answersContainer.appendChild(btn);
-        
-        // Answer button handler
-        btn.addEventListener('click', () => {
-          const selectedAnswer = parseInt(btn.dataset.answer);
-          const isCorrect = selectedAnswer === firstQuiz.correctAnswerIndex;
-          const allButtons = answersContainer.querySelectorAll('.hang-tube-answer-btn');
-
-          // Disable all buttons
-          allButtons.forEach((b) => {
-            b.style.pointerEvents = 'none';
-            if (parseInt(b.dataset.answer) === firstQuiz.correctAnswerIndex) {
-              b.style.background = '#4CAF50';
-              b.style.color = '#fff';
-              b.style.borderColor = '#4CAF50';
-            } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
-              b.style.background = '#f44336';
-              b.style.color = '#fff';
-              b.style.borderColor = '#f44336';
-            } else {
-              b.style.opacity = '0.6';
-            }
-          });
-
-          // Show feedback
-          if (questionFeedback) {
-            questionFeedback.style.display = 'block';
-            const correctAnswerText = firstQuiz.answers[firstQuiz.correctAnswerIndex];
-            questionFeedback.textContent = isCorrect ? '✓ Correct!' : `✗ Wrong! The correct answer is: ${correctAnswerText}`;
-            questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
-          }
-
-          // Apply punishment if wrong answer
-          if (!isCorrect && firstQuiz.punishment && punishments[firstQuiz.punishment]) {
-            punishments[firstQuiz.punishment]();
-          }
-        });
-
-        // Hover effect
-        btn.addEventListener('mouseenter', () => {
-          if (btn.style.pointerEvents !== 'none') {
-            btn.style.borderColor = '#4CAF50';
-            btn.style.background = '#f0f8f0';
-          }
-        });
-        btn.addEventListener('mouseleave', () => {
-          if (btn.style.pointerEvents !== 'none') {
-            btn.style.borderColor = '#ddd';
-            btn.style.background = '#fff';
-          }
-        });
-      });
-    }
-  }
 }
 
-// Initialize quizzes - fetch from server and create them with their delays
-async function initializeQuizzes() {
+// Function to fetch and create quizzes from server
+async function fetchAndCreateQuizzes() {
   try {
     // Get video ID from current page
     const videoId = getYouTubeVideoId(window.location.href);
     
     if (!videoId) {
-      console.log('Not on a YouTube video page, skipping quiz initialization');
+      console.log('Not on a YouTube video page, skipping quiz fetch');
       return;
     }
     
@@ -639,25 +509,35 @@ async function initializeQuizzes() {
     }
     
     // Transform server questions to quiz format
-    quizzes = quizData.questions.map((q, index) => transformServerQuestionToQuiz(q, index));
+    const fetchedQuizzes = quizData.questions.map((q, index) => transformServerQuestionToQuiz(q, index));
     
-    // Initialize quizzes with delays
-    quizzes.forEach((quiz, index) => {
-      if (index === 0) {
-        // First quiz is embedded in the main popup, so just create the popup
-        setTimeout(() => createAutoPopup(quiz), quiz.delay);
-      } else {
-        // Other quizzes use the generic createQuiz function
-        setTimeout(() => createQuiz(quiz), quiz.delay);
+    // Add quizzes to the queue instead of creating them immediately
+    fetchedQuizzes.forEach((quiz) => {
+      // Check if quiz already exists in the DOM (avoid duplicates)
+      if (!document.getElementById(`hang-tube-quiz-${quiz.id}`)) {
+        quizQueue.push(quiz);
       }
     });
+    
+    // Try to show the next quiz if none is currently showing
+    showNextQuiz();
   } catch (error) {
-    console.error('Error initializing quizzes:', error);
-    // Fallback: show error message or use empty quizzes array
+    console.error('Error fetching and creating quizzes:', error);
   }
 }
 
-// Wait for page to be fully loaded, then initialize all quizzes
+// Initialize: fetch on load and then every 10 seconds
+function initializeQuizzes() {
+  // Fetch immediately on load
+  fetchAndCreateQuizzes();
+  
+  // Then fetch every 10 seconds
+  setInterval(() => {
+    fetchAndCreateQuizzes();
+  }, 10000);
+}
+
+// Wait for page to be fully loaded, then initialize
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeQuizzes);
 } else {
