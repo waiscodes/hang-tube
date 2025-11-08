@@ -78,5 +78,52 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  // Multiple choice question handler
+  const answerButtons = document.querySelectorAll('.answer-btn');
+  const questionFeedback = document.getElementById('question-feedback');
+  const correctAnswer = 0; // First answer is correct
+
+  answerButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const selectedAnswer = parseInt(btn.dataset.answer);
+      const isCorrect = selectedAnswer === correctAnswer;
+
+      // Disable all buttons
+      answerButtons.forEach((b) => {
+        b.style.pointerEvents = 'none';
+        if (parseInt(b.dataset.answer) === correctAnswer) {
+          b.style.background = '#4CAF50';
+          b.style.color = '#fff';
+          b.style.borderColor = '#4CAF50';
+        } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
+          b.style.background = '#f44336';
+          b.style.color = '#fff';
+          b.style.borderColor = '#f44336';
+        } else {
+          b.style.opacity = '0.6';
+        }
+      });
+
+      // Show feedback
+      questionFeedback.style.display = 'block';
+      questionFeedback.textContent = isCorrect ? '✓ Correct!' : '✗ Wrong! The correct answer is: Apple is paying Google to fix Siri';
+      questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
+    });
+
+    // Hover effect
+    btn.addEventListener('mouseenter', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#4CAF50';
+        btn.style.background = '#f0f8f0';
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#ddd';
+        btn.style.background = '#fff';
+      }
+    });
+  });
 });
 

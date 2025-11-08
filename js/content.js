@@ -1,6 +1,65 @@
 // Content Script - runs in the context of web pages
 console.log('Hang Tube content script loaded');
 
+// Blur the YouTube video title
+function blurVideoTitle() {
+  // Target the title element - multiple selectors to catch different YouTube layouts
+  const titleSelectors = [
+    'h1.style-scope.ytd-watch-metadata yt-formatted-string',
+    'h1.ytd-watch-metadata yt-formatted-string',
+    '#title yt-formatted-string',
+    'yt-formatted-string[title]'
+  ];
+
+  const style = document.createElement('style');
+  style.id = 'hang-tube-title-blur';
+  style.textContent = `
+    /* Blur the video title */
+    h1.style-scope.ytd-watch-metadata yt-formatted-string,
+    h1.ytd-watch-metadata yt-formatted-string,
+    #title yt-formatted-string,
+    ytd-watch-metadata h1 yt-formatted-string {
+      filter: blur(5px) !important;
+      -webkit-filter: blur(5px) !important;
+      user-select: none !important;
+      pointer-events: none !important;
+    }
+  `;
+  
+  // Remove existing style if present
+  const existingStyle = document.getElementById('hang-tube-title-blur');
+  if (existingStyle) {
+    existingStyle.remove();
+  }
+  
+  document.head.appendChild(style);
+  
+  // Also try to blur dynamically if title loads later
+  const observer = new MutationObserver(() => {
+    titleSelectors.forEach(selector => {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(el => {
+        el.style.filter = 'blur(5px)';
+        el.style.webkitFilter = 'blur(5px)';
+        el.style.userSelect = 'none';
+        el.style.pointerEvents = 'none';
+      });
+    });
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+// Apply blur when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', blurVideoTitle);
+} else {
+  blurVideoTitle();
+}
+
 // Listen for messages from popup or background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'buttonClicked') {
@@ -103,6 +162,19 @@ function createAutoPopup() {
       <button id="hang-tube-fetch-btn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Fetch Transcript</button>
     </div>
     <div id="hang-tube-status" style="margin-top: 12px; color: #333; font-size: 14px;">Status: idle</div>
+    
+    <!-- Multiple Choice Question -->
+    <div id="hang-tube-question-container" style="margin-top:20px;padding:16px;background:#f5f5f5;border-radius:8px;border:1px solid #e0e0e0">
+      <h2 style="font-size:16px;font-weight:600;color:#333;margin-bottom:12px">Question:</h2>
+      <p id="hang-tube-question-text" style="font-size:14px;color:#555;margin-bottom:16px">What is the main topic of this video?</p>
+      <div id="hang-tube-answers-container" style="display:flex;flex-direction:column;gap:8px">
+        <button class="hang-tube-answer-btn" data-answer="0" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Apple is paying Google to fix Siri</button>
+        <button class="hang-tube-answer-btn" data-answer="1" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Google is developing a new AI assistant</button>
+        <button class="hang-tube-answer-btn" data-answer="2" style="padding:10px 12px;background:#fff;border:2px solid #ddd;border-radius:6px;cursor:pointer;text-align:left;font-size:14px;transition:all 0.2s">Apple is launching a new iPhone model</button>
+      </div>
+      <div id="hang-tube-question-feedback" style="margin-top:12px;font-size:14px;font-weight:600;display:none"></div>
+    </div>
+    
     <div style="margin-top: 12px;">
       <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
         <strong style="font-size: 14px;">Transcript</strong>
@@ -236,6 +308,55 @@ function createAutoPopup() {
       });
     });
   }
+
+  // Multiple choice question handler
+  const answerButtons = popup.querySelectorAll('.hang-tube-answer-btn');
+  const questionFeedback = document.getElementById('hang-tube-question-feedback');
+  const correctAnswer = 0; // First answer is correct
+
+  answerButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const selectedAnswer = parseInt(btn.dataset.answer);
+      const isCorrect = selectedAnswer === correctAnswer;
+
+      // Disable all buttons
+      answerButtons.forEach((b) => {
+        b.style.pointerEvents = 'none';
+        if (parseInt(b.dataset.answer) === correctAnswer) {
+          b.style.background = '#4CAF50';
+          b.style.color = '#fff';
+          b.style.borderColor = '#4CAF50';
+        } else if (parseInt(b.dataset.answer) === selectedAnswer && !isCorrect) {
+          b.style.background = '#f44336';
+          b.style.color = '#fff';
+          b.style.borderColor = '#f44336';
+        } else {
+          b.style.opacity = '0.6';
+        }
+      });
+
+      // Show feedback
+      if (questionFeedback) {
+        questionFeedback.style.display = 'block';
+        questionFeedback.textContent = isCorrect ? '✓ Correct!' : '✗ Wrong! The correct answer is: Apple is paying Google to fix Siri';
+        questionFeedback.style.color = isCorrect ? '#4CAF50' : '#f44336';
+      }
+    });
+
+    // Hover effect
+    btn.addEventListener('mouseenter', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#4CAF50';
+        btn.style.background = '#f0f8f0';
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (btn.style.pointerEvents !== 'none') {
+        btn.style.borderColor = '#ddd';
+        btn.style.background = '#fff';
+      }
+    });
+  });
 }
 
 // Wait for page to be fully loaded, then show popup after 5 seconds
